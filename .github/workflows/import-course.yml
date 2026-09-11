@@ -17,7 +17,7 @@ jobs:
           fetch-depth: 0
       - name: Decode verified course archive
         run: |
-          base64 --decode course.b64 > /tmp/course.zip
+          cat course.b64.part* | base64 --decode > /tmp/course.zip
           test "$(sha256sum /tmp/course.zip | awk '{print $1}')" = "2e409fb21ff2955fe128d6950fe1ab72665dbda357e721c3f003328bd825bbee"
       - name: Replace repository with course
         run: |
