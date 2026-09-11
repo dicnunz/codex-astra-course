@@ -9,68 +9,18 @@ permissions:
 
 jobs:
   import:
-    if: github.event.head_commit.message == 'Bootstrap course import'
+    if: github.event.head_commit.message == 'Import complete course archive'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Download verified course archive
-        env:
-          SHARE_URL: https://firestorage.ai/ja/f/E8DJjVxu9PgE
+      - name: Decode verified course archive
         run: |
-          python - <<'PY'
-          import html, json, re, sys
-          from pathlib import Path
-          from urllib.parse import urljoin
-          import requests
-
-          share = __import__('os').environ['SHARE_URL']
-          s = requests.Session()
-          r = s.get(share, timeout=30)
-          r.raise_for_status()
-          data = r.content
-          out = Path('/tmp/course.zip')
-          if data[:2] == b'PK':
-              out.write_bytes(data)
-              raise SystemExit(0)
-
-          text = html.unescape(r.text).replace('\\/', '/')
-          candidates = []
-          patterns = [
-              r'https?://[^"\'<>\\s]+',
-              r'href=["\']([^"\']+)["\']',
-              r'(?:downloadUrl|download_url|fileUrl|file_url|url)["\']?\s*[:=]\s*["\']([^"\']+)',
-          ]
-          for pat in patterns:
-              for m in re.finditer(pat, text, flags=re.I):
-                  u = m.group(1) if m.lastindex else m.group(0)
-                  u = urljoin(share, u)
-                  if u not in candidates:
-                      candidates.append(u)
-
-          scored = sorted(candidates, key=lambda u: (
-              0 if '.zip' in u.lower() else 1,
-              0 if any(k in u.lower() for k in ('download','storage','file')) else 1,
-              len(u),
-          ))
-          for u in scored:
-              if u == share:
-                  continue
-              try:
-                  rr = s.get(u, timeout=30, allow_redirects=True)
-                  if rr.ok and rr.content[:2] == b'PK':
-                      out.write_bytes(rr.content)
-                      print('downloaded', rr.url)
-                      raise SystemExit(0)
-              except requests.RequestException:
-                  pass
-          print('Could not resolve ZIP from share page', file=sys.stderr)
-          raise SystemExit(1)
-          PY
+          base64 --decode course.b64 > /tmp/course.zip
+          test "$(sha256sum /tmp/course.zip | awk '{print $1}')" = "2e409fb21ff2955fe128d6950fe1ab72665dbda357e721c3f003328bd825bbee"
       - name: Replace repository with course
         run: |
-          test "$(sha256sum /tmp/course.zip | awk '{print $1}')" = "2e409fb21ff2955fe128d6950fe1ab72665dbda357e721c3f003328bd825bbee"
           rm -rf /tmp/course && mkdir /tmp/course
           unzip -q /tmp/course.zip -d /tmp/course
           src="$(find /tmp/course -mindepth 1 -maxdepth 1 -type d | head -n1)"
